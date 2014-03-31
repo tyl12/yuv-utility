@@ -790,8 +790,8 @@ class DataInspector(QtGui.QWidget):
 
 if __name__ == "__main__":
     app = QtGui.QApplication(sys.argv)
-    inspect=DataInspector()
-    #inspect=YuvPanel()
+    #inspect=DataInspector()
+    inspect=YuvPanel()
     inspect.show()
     sys.exit(app.exec_())
 
