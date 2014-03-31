@@ -13,6 +13,8 @@ import yuvdecoder
 from PyQt4 import QtGui
 from PyQt4 import QtCore
 
+import ConfigParser
+
 #sys.path.append('../..')
 COLOR_LIST = yuvdecoder.YUVDecoder.get_color_list()
 
@@ -152,9 +154,36 @@ class YuvPanel(QtGui.QWidget):
         self.setWindowModality(QtCore.Qt.ApplicationModal)
         self.show()
 
+    def read_config(self):
+        if not os.path.isfile(self.config_file):
+            self.imgwidth=640
+            self.imgheight=480
+            self.color='I420'
+            self.yuvfile=''
+        else:
+            print "read config file"
+            config = ConfigParser.ConfigParser()
+            config.read(self.config_file)
+            self.imgwidth=int(config.get('main','width'))
+            self.imgheight=int(config.get('main','height'))
+            self.color=config.get('main','color')
+            self.yuvfile=config.get('main','filepath')
+
+    def write_config(self):
+        config = ConfigParser.ConfigParser()
+        config.add_section("main")
+        config.set('main', 'width', self.imgwidth)
+        config.set('main', 'height', self.imgheight)
+        config.set('main', 'color', self.color)
+        config.set('main', 'filepath', self.yuvfile)
+        config.write(open(self.config_file,'w+'))
+
     def initUI(self):
+        ##update local default setting if previous config file found
         #filename, color, width, height,
-        self.yuvfile    = ''
+        self.config_file = r'/tmp/yuvutil.conf'
+        self.read_config()
+
         self.path       = QtGui.QLabel()
         self.path.setText(self.yuvfile)
         self.choose     = QtGui.QPushButton('YUV File')
@@ -165,16 +194,17 @@ class YuvPanel(QtGui.QWidget):
 
         self.color_tag       = QtGui.QLabel()
         self.color_tag.setText(str("format"+' '*4))
-        self.color = COLOR_LIST[0]
         self.color_box =QtGui.QComboBox()
         self.color_box.setEnabled(True)
         self.color_box.addItems(COLOR_LIST)
+        idx = self.color_box.findText(self.color)
+        if idx != -1:
+            self.color_box.setCurrentIndex(idx)
+
         self.layout_color = QtGui.QHBoxLayout()
         self.layout_color.addWidget(self.color_tag)
         self.layout_color.addWidget(self.color_box)
 
-        self.imgwidth       = 640
-        self.imgheight      = 480
         self.width_lineEdit = QtGui.QLineEdit()
         self.height_lineEdit = QtGui.QLineEdit()
         self.width_lineEdit.setText(str(self.imgwidth))
@@ -273,6 +303,8 @@ class YuvPanel(QtGui.QWidget):
         self.imgheight = int(self.height_lineEdit.text())
         print self.yuvfile, self.color, self.imgwidth, self.imgheight
         self.sliderPanel = sliderPanel(self, self.yuvfile, self.color, self.imgwidth, self.imgheight)
+        ## save the current setting.
+        self.write_config()
 
 if __name__ == "__main__":
     app = QtGui.QApplication(sys.argv)
