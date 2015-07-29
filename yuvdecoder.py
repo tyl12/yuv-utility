@@ -1,5 +1,10 @@
+#!/usr/bin/python
+
+
 from numpy import *
+import getopt
 import os
+import sys
 import Image
 import time
 screenLevels = 255.0
@@ -18,9 +23,9 @@ class YUVDecoder:
     __DECODE_MAP = {
             #color:[bit per pixel, desc]
             'I420':[12, "8 bit Y plane followed by 8 bit 2x2 subsampled U and V planes."],
-            'NV21':[12, "As NV12 with U and V reversed in the interleaved plane"],
-            'NV12':[12, "8-bit Y plane followed by an interleaved U/V plane with 2x2 subsampling"],
             'YV12':[12, "8 bit Y plane followed by 8 bit 2x2 subsampled V and U planes."],
+            'NV12':[12, "8-bit Y plane followed by an interleaved U/V plane with 2x2 subsampling"],
+            'NV21':[12, "As NV12 with U and V reversed in the interleaved plane"],
             #'YV16':[12, "8 bit Y plane followed by 8 bit 2x1 subsampled V and U planes."],
             'UYVY':[16, "YUV 4:2:2 (Y sample at every pixel, U and V sampled at every second pixel \
                     horizontally on each line). A macropixel contains 2 pixels in 1 u_int32."],
@@ -44,7 +49,8 @@ class YUVDecoder:
         self.__color = color
         self.__row = row
         self.__col = col
-        self.__inplace = True # in-place yuv->rgb conversion
+        #self.__inplace = True # in-place yuv->rgb conversion
+        self.__inplace = False # in-place yuv->rgb conversion
         if not os.path.isfile(filename):
             raise Exception("ERROR: invalid file %s" % filename)
         self.__fd = open(filename, 'rb')
@@ -106,6 +112,8 @@ class YUVDecoder:
             for n in range(COL):
                 y_idx = y_baseoffset + m*COL + n
                 y = raw_buf[y_idx]
+                '''
+                #wrong
                 if m%2 == 0:
                     if n%2 == 0:
                         u_idx = u_baseoffset + int(m/2)*COL/2+ int(n/2)
@@ -114,6 +122,13 @@ class YUVDecoder:
                         v=raw_buf[v_idx]
                 u=u
                 v=v
+                '''
+                byte_offset = int(m/2)*COL/2+ int(n/2)
+                u_idx = u_baseoffset + byte_offset
+                u=raw_buf[u_idx]
+                v_idx = v_baseoffset + byte_offset
+                v=raw_buf[v_idx]
+
                 pixel[n,m] = (y, u, v)
         return yuvimg
 
@@ -156,14 +171,24 @@ class YUVDecoder:
             for n in range(COL):
                 y_idx = y_baseoffset + m*COL + n
                 y = raw_buf[y_idx]
+                '''
+                #wrong
                 if m%2 == 0:
                     if n%2 == 0:
-                        u_idx = u_baseoffset + int(m/2)*COL/2+ int(n/2)*2
+                        #u_idx = u_baseoffset + int(m/2)*int(COL/2)+ int(n/2)*2
+                        u_idx = u_baseoffset + int(m/2)*int(COL)+ int(n/2)*2
                         u=raw_buf[u_idx]
-                        v_idx = v_baseoffset + int(m/2)*COL/2+ int(n/2)
+                        #v_idx = v_baseoffset + int(m/2)*int(COL/2)+ int(n/2)
+                        v_idx = u_idx+1
                         v=raw_buf[v_idx]
                 u=u
                 v=v
+                '''
+                u_idx = u_baseoffset + int(m/2)*int(COL)+ int(n/2)*2
+                u=raw_buf[u_idx]
+                v_idx = u_idx+1
+                v=raw_buf[v_idx]
+
                 pixel[n,m] = (y, u, v)
         return yuvimg
 
@@ -286,6 +311,9 @@ class YUVDecoder:
             for j in range(COL):
                 (y,u,v) = yuvpixel[j,i]
 
+                '''
+                choice 1
+                '''
                 c = y - 16
                 d = u - 128
                 e = v - 128
@@ -294,15 +322,27 @@ class YUVDecoder:
                 g = ( 298 * c - 100 * d - 208 * e + 128)>>8
                 b = ( 298 * c + 516 * d           + 128)>>8
 
+                r = round_val(r)
+                g = round_val(g)
+                b = round_val(b)
+
+                '''
+                choice 2
+                '''
                 '''or use below algorithm, but fix point one will be much faster
                 r=int(y+1.4075*(v-128))
                 g=int(y-0.3455*(u-128)-0.7169*(v-128))
                 b=int(y+1.779*(u-128))
                 '''
 
-                r = round_val(r)
-                g = round_val(g)
-                b = round_val(b)
+                '''
+                choice 3
+                '''
+                '''
+                r = 1.164 * (y-16) + 1.596 * (v - 128)
+                g = 1.164 * (y-16) - 0.813 * (v - 128) - 0.391 * (u - 128)
+                b = 1.164 * (y-16) + 2.018 * (u - 128)
+                '''
 
                 #img.putpixel((j,i),(r,g,b))
                 pixel[j,i] = (r,g,b)
@@ -312,26 +352,73 @@ class YUVDecoder:
         return img
 
 ###################################################################################
-if __name__ == '__main__':
-    ROW=288
-    COL=352
-    f=r'/home/mysamba/public/bus_cif.yuv'
-    color = 'I420'
 
-    ROW=720
-    COL=1280
-    f=r'/home/mysamba/public/in_to_tree_420_720p50.y4m'
-    color = 'NV21'
 
+
+def convert_yuv_to_jpeg(f, color, ROW, COL, dstfile):
     decoder = YUVDecoder(f, color, ROW, COL)
-    for frameidx in range(3):
-        dstfile = r'/home/mysamba/public/bus_cif_%s.jpg' % frameidx
+    for frameidx in range(1):
         yuvimg = decoder.decode_frame_YUV(frameidx)
         rgbimg = decoder.encode_frame_rgb888(frameidx)
         if not rgbimg:
-            print "ERROR: fail to parse frameidx %s" % frameidx
+            #print "ERROR: fail to parse frameidx %s" % frameidx
+            print "ERROR: fail to process file %s" % f
         else:
-            rgbimg.save(r'/home/mysamba/public/rgb888_%s.jpg'%(frameidx))
+            #rgbimg.save(r'/home/mysamba/public/rgb888_%s.jpg'%(frameidx))
+            rgbimg.save(dstfile)
 
+    return
+
+def show_help():
+    print "python yuvdecoder.py -f image -w width -h height -c color -d"
+    print "supported color list:"
+    color_list = YUVDecoder.get_color_list();
+    for i in color_list:
+        print " "*5 + i
+
+
+if __name__ == '__main__':
+
+    opts, args = getopt.getopt(sys.argv[1:], "f:w:h:c:d")
+    COL = 640
+    ROW = 480
+    color = "NV12"
+    src = "./image.yuv"
+    debug_mode = False
+
+    for op, value in opts:
+        if op == "-f":
+            src = str(value)
+        elif op == "-w":
+            COL = int(value)
+        elif op == "-h":
+            ROW = int(value)
+        elif op == "-c":
+            color = str(value)
+        elif op == "-d":
+            debug_mode=True
+
+    if not os.path.exists(src):
+        print "ERROR: Inavlid src: " + src
+        show_help()
+        exit(0)
+
+    print "--> file: " + src
+    print "--> width: " + str(COL)
+    print "--> height: " + str(ROW)
+    print "--> color: " + color
+    print "--> debug: " + str(debug_mode)
+    print "\n"
+
+
+    cur_dir=os.path.abspath('.')
+    basename=os.path.basename(src).split('.')[0]
+    dstfile=os.path.join(cur_dir, basename+'.jpg')
+    #print cur_dir
+    #print basename
+    #print dstfile
+
+    convert_yuv_to_jpeg(src, color, ROW, COL, dstfile)
+    print "Output: " + dstfile
 
 
