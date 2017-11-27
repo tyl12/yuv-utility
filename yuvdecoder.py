@@ -1,11 +1,10 @@
 #!/usr/bin/python
 
-
 from numpy import *
 import getopt
 import os
 import sys
-import Image
+from PIL import Image
 import time
 screenLevels = 255.0
 
@@ -353,8 +352,6 @@ class YUVDecoder:
 
 ###################################################################################
 
-
-
 def convert_yuv_to_jpeg(f, color, ROW, COL, dstfile):
     decoder = YUVDecoder(f, color, ROW, COL)
     for frameidx in range(1):
@@ -365,6 +362,8 @@ def convert_yuv_to_jpeg(f, color, ROW, COL, dstfile):
             print "ERROR: fail to process file %s" % f
         else:
             #rgbimg.save(r'/home/mysamba/public/rgb888_%s.jpg'%(frameidx))
+            #rgbimg.save(r'C:\Users\lenovo\Downloads\test.jpg')
+            rgbimg.save(os.path.join(".","convert_yuv_to_jpeg.jpg"));
             rgbimg.save(dstfile)
 
     return
